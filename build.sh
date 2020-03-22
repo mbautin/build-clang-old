@@ -17,10 +17,9 @@ if ! command -v hub; then
 fi
 
 if ! command -v ninja; then
-  git clone --depth 1 https://github.com/ninja-build/ninja
+  git clone --depth 1 --branch release https://github.com/ninja-build/ninja
   (
     cd ninja
-    git checkout release
     ./bootstrap.py
     cp ninja "$tools_bin_dir"
   )
