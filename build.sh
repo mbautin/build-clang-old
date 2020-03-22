@@ -56,9 +56,9 @@ cmake -G Ninja "$llvm_checkout_dir/llvm" \
   -DLLVM_BUILD_EXAMPLES=ON
 echo "::endgroup::"
 
-skip_build=true
+run_build=false
 
-if "$skip_build"; then
+if "$run_build"; then
   echo "::group::Build LLVM and Clang"
   ninja
   echo "::endgroup"
@@ -98,6 +98,8 @@ if "$skip_build"; then
   cp "$test_results" "$install_dir"
 
   cd "$top_dir"
+else
+  echo "Skipped the build (testing release uploads.)"
 fi
 
 build_archive="$build_dir_basename-$llvm_sha1.zip"
