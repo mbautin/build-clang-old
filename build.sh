@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -euxo pipefail
+set -euo pipefail
 
 num_commits=$( git rev-list --count HEAD )
 
@@ -27,6 +27,11 @@ if ! command -v ninja; then
   )
 fi
 
+if [[ -z ${GITHUB_TOKEN:-} ]]; then
+  echo "GITHUB_TOKEN is not set. I won't be able to publish the release." >&2
+  exit 1
+fi
+
 llvm_checkout_dir="$top_dir/llvm-project"
 git clone --depth 1 https://github.com/llvm/llvm-project.git "$llvm_checkout_dir" 2>&1 | \
   grep -Ev 'Updating files:'
@@ -42,53 +47,64 @@ install_dir="$top_dir/$install_dir_basename"
 mkdir -p "$install_dir"
 
 # Flags: https://llvm.org/docs/CMake.html
+echo "::group::Run CMake"
 cmake -G Ninja "$llvm_checkout_dir/llvm" \
   -DLLVM_ENABLE_PROJECTS="clang;clang-tools-extra" \
   -DLLVM_BUILD_TESTS=ON \
   -DCMAKE_INSTALL_PREFIX="$install_dir" \
   -DLLVM_TARGETS_TO_BUILD="X86" \
   -DLLVM_BUILD_EXAMPLES=ON
+echo "::endgroup::"
 
-ninja
+skip_build=true
 
-test_results="$top_dir/test_results.log"
+if "$skip_build"; then
+  echo "::group::Build LLVM and Clang"
+  ninja
+  echo "::endgroup"
 
-set +e
-(
-  test_exit_code=0
+  echo :":group::Run tests"
+  test_results="$top_dir/test_results.log"
   set +e
-  # Test LLVM only.
-  ninja check
-  if [[ $? -ne 0 ]]; then
-    test_exit_code=$?
-  fi
+  (
+    test_exit_code=0
+    set +e
+    # Test LLVM only.
+    ninja check
+    if [[ $? -ne 0 ]]; then
+      test_exit_code=$?
+    fi
 
-  # Test Clang only.
-  ninja clang-test
-  if [[ $? -ne 0 ]]; then
-    test_exit_code=$?
-  fi
+    # Test Clang only.
+    ninja clang-test
+    if [[ $? -ne 0 ]]; then
+      test_exit_code=$?
+    fi
 
-  exit $test_exit_code
-) 2>&1 | tee "$test_results"
-test_exit_code=$?
-set -e
-echo >>"$test_results"
-echo "Tests exited with code $test_exit_code" >>"$test_results"
+    exit $test_exit_code
+  ) 2>&1 | tee "$test_results"
+  test_exit_code=$?
+  set -e
+  echo >>"$test_results"
+  echo "Tests exited with code $test_exit_code" >>"$test_results"
+  echo "::endgroup::"
 
-mkdir -p "$install_dir"
-ninja install
+  echo "::group::Install LLVM and Clang"
+  mkdir -p "$install_dir"
+  ninja install
+  echo "::endgroup"
 
-cp "$test_results" "$build_dir"
-cp "$test_results" "$install_dir"
+  cp "$test_results" "$build_dir"
+  cp "$test_results" "$install_dir"
 
-cd "$top_dir"
+  cd "$top_dir"
+fi
 
 build_archive="$build_dir_basename-$llvm_sha1.zip"
-zip "$build_archive" "$build_dir_basename"
+zip -r "$build_archive" "$build_dir_basename"
 
 installed_archive="$install_dir_basename-$llvm_sha1.zip"
-zip "$installed_archive" "$install_dir_basename"
+zip -r "$installed_archive" "$install_dir_basename"
 
 hub release create "$tag" \
   -m "Release for LLVM commit $llvm_sha1" \
