@@ -10,6 +10,12 @@ tools_bin_dir="$top_dir/bin"
 mkdir -p "$tools_bin_dir"
 export PATH="$tools_bin_dir:$PATH"
 
+if ! command -v hub; then
+  # hub will get installed into the bin directory inside of the current directory
+  curl -fsSL https://github.com/github/hub/raw/master/script/get | bash -s 2.14.1
+  ls -l "$tools_bin_dir"
+fi
+
 if ! command -v ninja; then
   git clone https://github.com/ninja-build/ninja
   (
@@ -21,21 +27,36 @@ if ! command -v ninja; then
 fi
 
 llvm_checkout_dir="$top_dir/llvm-project"
-git clone https://github.com/llvm/llvm-project.git "$llvm_checkout_dir"
+git clone https://github.com/llvm/llvm-project.git "$llvm_checkout_dir" 2>&1 | \
+  grep -Ev 'Updating files:'
+llvm_sha1=$( cd "$llvm_checkout_dir" | git rev-parse HEAD )
+tag="llvm-$llvm_sha1"
 build_dir="$top_dir/build"
 mkdir -p "$build_dir"
 cd "$build_dir"
-install_dir="$top_dir/installed"
+
+install_dir="$top_dir/clang-installed"
+mkdir -p "$install_dir"
+
+# Flags: https://llvm.org/docs/CMake.html
 cmake -G Ninja "$llvm_checkout_dir/llvm" \
   -DLLVM_ENABLE_PROJECTS="clang;clang-tools-extra" \
   -DLLVM_BUILD_TESTS=ON \
-  -DCMAKE_INSTALL_PREFIX="$install_dir"
+  -DCMAKE_INSTALL_PREFIX="$install_dir" \
+  -DLLVM_TARGETS_TO_BUILD="X86"
 
-ninja
+#ninja
+
 # Test LLVM only.
-ninja check
+#ninja check
+
 # Test Clang only.
-ninja clang-test
-ninja install
+#ninja clang-test
+mkdir -p "$install_dir"
+#ninja install
 
-
+cd "$top_dir"
+installed_archive="clang-installed.zip"
+zip "$installed_archive" "$install_dir"
+hub release create "$tag" -m "Release for LLVM commit $llvm_sha1" \
+  -a "$installed_archive"
