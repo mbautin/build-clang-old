@@ -44,17 +44,41 @@ cmake -G Ninja "$llvm_checkout_dir/llvm" \
   -DLLVM_ENABLE_PROJECTS="clang;clang-tools-extra" \
   -DLLVM_BUILD_TESTS=ON \
   -DCMAKE_INSTALL_PREFIX="$install_dir" \
-  -DLLVM_TARGETS_TO_BUILD="X86"
+  -DLLVM_TARGETS_TO_BUILD="X86" \
+  -DLLVM_BUILD_EXAMPLES=ON
 
 ninja
 
-# Test LLVM only.
-ninja check
+test_results="$top_dir/test_results.log"
 
-# Test Clang only.
-ninja clang-test
+set +e
+(
+  test_exit_code=0
+  set +e
+  # Test LLVM only.
+  ninja check
+  if [[ $? -ne 0 ]]; then
+    test_exit_code=$?
+  fi
+
+  # Test Clang only.
+  ninja clang-test
+  if [[ $? -ne 0 ]]; then
+    test_exit_code=$?
+  fi
+
+  exit $test_exit_code
+) 2>&1 | tee "$test_results"
+test_exit-code=$?
+set -e 
+echo >>"$test_results"
+echo "Tests exited with code $test_exit_code" >>"$test_results"
+
 mkdir -p "$install_dir"
 ninja install
+
+cp "$test_results" "$build_dir"
+cp "$test_results" "$install_dir"
 
 cd "$top_dir"
 
