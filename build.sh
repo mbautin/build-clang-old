@@ -58,10 +58,10 @@ ninja install
 
 cd "$top_dir"
 
-build_archive="$build_dir_basename.zip"
+build_archive="$build_dir_basename-$llvm_sha1.zip"
 zip "$build_archive" "$build_dir_basename"
 
-installed_archive="$install_dir_basename.zip"
+installed_archive="$install_dir_basename-$llvm_sha1.zip"
 zip "$installed_archive" "$install_dir_basename"
 
 hub release create "$tag" \
