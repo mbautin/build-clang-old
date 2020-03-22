@@ -30,7 +30,8 @@ git clone --depth 1 https://github.com/llvm/llvm-project.git "$llvm_checkout_dir
   grep -Ev 'Updating files:'
 llvm_sha1=$( cd "$llvm_checkout_dir" | git rev-parse HEAD )
 tag="llvm-$llvm_sha1"
-build_dir="$top_dir/build"
+build_dir_basename="clang-build"
+build_dir="$top_dir/$build_dir_basename"
 mkdir -p "$build_dir"
 cd "$build_dir"
 
@@ -45,19 +46,25 @@ cmake -G Ninja "$llvm_checkout_dir/llvm" \
   -DCMAKE_INSTALL_PREFIX="$install_dir" \
   -DLLVM_TARGETS_TO_BUILD="X86"
 
-#ninja
+ninja
 
 # Test LLVM only.
-#ninja check
+ninja check
 
 # Test Clang only.
-#ninja clang-test
+ninja clang-test
 mkdir -p "$install_dir"
-#ninja install
+ninja install
 
 cd "$top_dir"
-installed_archive="clang-installed.zip"
+
+build_archive="$build_dir_basename.zip"
+zip "$build_archive" "$build_dir_basename"
+
+installed_archive="$install_dir_basename.zip"
 zip "$installed_archive" "$install_dir_basename"
+
 hub release create "$tag" \
   -m "Release for LLVM commit $llvm_sha1" \
+  -a "$build_archive" \
   -a "$installed_archive"
