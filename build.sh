@@ -17,7 +17,7 @@ if ! command -v hub; then
 fi
 
 if ! command -v ninja; then
-  git clone https://github.com/ninja-build/ninja
+  git clone --depth 1 https://github.com/ninja-build/ninja
   (
     cd ninja
     git checkout release
@@ -27,7 +27,7 @@ if ! command -v ninja; then
 fi
 
 llvm_checkout_dir="$top_dir/llvm-project"
-git clone https://github.com/llvm/llvm-project.git "$llvm_checkout_dir" 2>&1 | \
+git clone --depth 1 https://github.com/llvm/llvm-project.git "$llvm_checkout_dir" 2>&1 | \
   grep -Ev 'Updating files:'
 llvm_sha1=$( cd "$llvm_checkout_dir" | git rev-parse HEAD )
 tag="llvm-$llvm_sha1"
@@ -35,7 +35,8 @@ build_dir="$top_dir/build"
 mkdir -p "$build_dir"
 cd "$build_dir"
 
-install_dir="$top_dir/clang-installed"
+install_dir_basename="clang-installed"
+install_dir="$top_dir/$install_dir_basename"
 mkdir -p "$install_dir"
 
 # Flags: https://llvm.org/docs/CMake.html
@@ -57,6 +58,7 @@ mkdir -p "$install_dir"
 
 cd "$top_dir"
 installed_archive="clang-installed.zip"
-zip "$installed_archive" "$install_dir"
-hub release create "$tag" -m "Release for LLVM commit $llvm_sha1" \
+zip "$installed_archive" "$install_dir_basename"
+hub release create "$tag" \
+  -m "Release for LLVM commit $llvm_sha1" \
   -a "$installed_archive"
