@@ -2,6 +2,8 @@
 
 set -euxo pipefail
 
+num_commits=$( git rev-list --count HEAD )
+
 top_dir=$PWD/clang-llvm
 mkdir -p "$top_dir"
 cd "$top_dir"
@@ -29,7 +31,7 @@ llvm_checkout_dir="$top_dir/llvm-project"
 git clone --depth 1 https://github.com/llvm/llvm-project.git "$llvm_checkout_dir" 2>&1 | \
   grep -Ev 'Updating files:'
 llvm_sha1=$( cd "$llvm_checkout_dir" | git rev-parse HEAD )
-tag="llvm-$llvm_sha1"
+tag="llvm-$llvm_sha1-v$num_commits"
 build_dir_basename="clang-build"
 build_dir="$top_dir/$build_dir_basename"
 mkdir -p "$build_dir"
@@ -69,8 +71,8 @@ set +e
 
   exit $test_exit_code
 ) 2>&1 | tee "$test_results"
-test_exit-code=$?
-set -e 
+test_exit_code=$?
+set -e
 echo >>"$test_results"
 echo "Tests exited with code $test_exit_code" >>"$test_results"
 
