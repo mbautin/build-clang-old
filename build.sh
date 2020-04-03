@@ -10,14 +10,16 @@ end_group() {
   echo "::endgroup::$*"
 }
 
-if [[ $# -eq 0 ]]; then
-  echo "step expected: 'build' or 'upload'" >&2
-  exit 1
-fi
-step=$1
-if [[ ! $step =~ ^(build|upload) ]]; then
-  echo "Either 'build' or 'upload' step expected" >&2
-  exit 1
+fatal() {
+  echo "$@" >&2
+  exit 1 
+}
+
+initial_dir=$PWD
+
+step=${1:-}
+if [[ ! $step =~ ^(build|upload|zip) ]]; then
+  fatal "Either 'build' or 'upload' step expected, got: $step"
 fi
 
 top_dir=$HOME/clang-llvm
@@ -39,15 +41,15 @@ if [[ "$step" == "upload" && -z ${GITHUB_TOKEN:-} ]]; then
   exit 1
 fi
 
-start_group "Cloning LLVM code if not already done"
-if [[ ! -d $llvm_checkout_dir/.git ]]; then
-  git clone --depth 1 https://github.com/llvm/llvm-project.git "$llvm_checkout_dir" 2>&1 | \
-    grep -Ev 'Updating files:'
-fi
-llvm_sha1=$( cd "$llvm_checkout_dir" && git rev-parse HEAD )
-end_group
-
 if [[ $step == "build" ]]; then
+  start_group "Cloning LLVM code if not already done"
+  if [[ ! -d $llvm_checkout_dir/.git ]]; then
+    git clone --depth 1 https://github.com/llvm/llvm-project.git "$llvm_checkout_dir" 2>&1 | \
+      grep -Ev 'Updating files:'
+  fi
+  llvm_sha1=$( cd "$llvm_checkout_dir" && git rev-parse HEAD )
+  end_group
+
   if ! command -v ninja; then
     start_group "Installing Ninja"
     git clone --depth 1 --branch release https://github.com/ninja-build/ninja
@@ -61,66 +63,80 @@ if [[ $step == "build" ]]; then
 
   # Flags: https://llvm.org/docs/CMake.html
 
-  cd "$build_dir"
-  start_group "Run CMake"
-  cmake \
-    -G Ninja \
-    "$llvm_checkout_dir/llvm" \
-    -DLLVM_ENABLE_PROJECTS="clang;clang-tools-extra" \
-    -DLLVM_BUILD_TESTS=ON \
-    -DCMAKE_INSTALL_PREFIX="$install_dir" \
-    -DLLVM_TARGETS_TO_BUILD="X86" \
-    -DLLVM_BUILD_EXAMPLES=ON \
-    -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-  end_group
-
-  start_group "Build LLVM and Clang"
-  ninja
-  echo "::endgroup"
-
-  echo :":group::Run tests"
-  test_results="$top_dir/test_results.log"
-  set +e
   (
-    test_exit_code=0
+    cd "$build_dir"
+    start_group "Run CMake"
+    cmake \
+      -G Ninja \
+      "$llvm_checkout_dir/llvm" \
+      -DLLVM_ENABLE_PROJECTS="clang;clang-tools-extra" \
+      -DLLVM_BUILD_TESTS=ON \
+      -DCMAKE_INSTALL_PREFIX="$install_dir" \
+      -DLLVM_TARGETS_TO_BUILD="X86" \
+      -DLLVM_BUILD_EXAMPLES=ON \
+      -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+    end_group
+
+    start_group "Build LLVM and Clang"
+    ninja
+    end_group
+
+    start_group "Running tests"
+    test_results="$top_dir/test_results.log"
     set +e
-    # Test LLVM only.
-    ninja check
-    if [[ $? -ne 0 ]]; then
-      test_exit_code=$?
-    fi
+    (
+      test_exit_code=0
+      set +e
+      # Test LLVM only.
+      ninja check
+      if [[ $? -ne 0 ]]; then
+        test_exit_code=$?
+      fi
 
-    # Test Clang only.
-    ninja clang-test
-    if [[ $? -ne 0 ]]; then
-      test_exit_code=$?
-    fi
+      # Test Clang only.
+      ninja clang-test
+      if [[ $? -ne 0 ]]; then
+        test_exit_code=$?
+      fi
 
-    exit $test_exit_code
-  ) 2>&1 | tee "$test_results"
-  test_exit_code=$?
-  set -e
-  echo >>"$test_results"
-  echo "Tests exited with code $test_exit_code" >>"$test_results"
+      exit $test_exit_code
+    ) 2>&1 | tee "$test_results"
+    test_exit_code=$?
+    set -e
+    echo >>"$test_results"
+    echo "Tests exited with code $test_exit_code" >>"$test_results"
+    end_group
+
+    start_group "Install LLVM and Clang into $install_dir"
+    mkdir -p "$install_dir"
+    ninja install
+    end_group
+
+    cp "$test_results" "$build_dir"
+  )
+fi
+
+if [[ -n ${GITHUB_RUN_ID:-} && -n ${GITHUB_RUN_NUMBER:-} ]]; then
+  tag="llvm-$llvm_sha1-$GITHUB_RUN_ID-$GITHUB_RUN_NUMBER"
+else
+  tag="llvm-$llvm_sha1"
+fi
+
+build_archive="$build_dir_basename-$tag.zip"
+installed_archive="$install_dir_basename-$tag.zip"
+
+if [[ $step == "zip" ]]; then
+  start_group "Creating $build_archive"
+  ( set -x; zip -qr "$build_archive" "$build_dir_basename" )
   end_group
-
-  start_group "Install LLVM and Clang"
-  mkdir -p "$install_dir"
-  ninja install
-  echo "::endgroup"
-
-  cp "$test_results" "$build_dir"
+  
+  start_group "Creating $installed_archive"
+  ( set -x; zip -qr "$installed_archive" "$install_dir_basename" )
+  end_group
 fi
 
 if [[ $step == "upload" ]]; then
-  tag="llvm-$llvm_sha1-$GITHUB_RUN_ID-$GITHUB_RUN_NUMBER"
-
-  build_archive="$build_dir_basename-$llvm_sha1.zip"
-  ( set -x; zip -r "$build_archive" "$build_dir_basename" )
-
-  installed_archive="$install_dir_basename-$llvm_sha1.zip"
-  ( set -x; zip -r "$installed_archive" "$install_dir_basename" )
-
+  cd "$initial_dir"
   set -x
   hub release create "$tag" \
     -m "Release for LLVM commit $llvm_sha1" \
