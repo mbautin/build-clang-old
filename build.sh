@@ -2,7 +2,15 @@
 
 set -euo pipefail
 
-num_commits=$( git rev-list --count HEAD )
+if [[ $# -eq 0 ]]; then
+  echo "Command expected" >&2
+  exit 1
+fi
+command=$1
+if [[ $command != "build" && $comamnd != "upload" ]]; then
+  echo "Either 'build' or 'upload' expected" >&2
+  exit 1
+fi
 
 top_dir=$PWD/clang-llvm
 mkdir -p "$top_dir"
@@ -41,7 +49,7 @@ git clone --depth 1 https://github.com/llvm/llvm-project.git "$llvm_checkout_dir
 llvm_sha1=$( cd "$llvm_checkout_dir" | git rev-parse HEAD )
 echo "::endgroup::"
 
-tag="llvm-$llvm_sha1-v$num_commits"
+tag="llvm-$llvm_sha1-$GITHUB_RUN_ID-$GITHUB_RUN_NUMBER"
 echo "Will use this tag for the release: $tag"
 build_dir_basename="clang-build"
 build_dir="$top_dir/$build_dir_basename"
@@ -53,9 +61,7 @@ install_dir="$top_dir/$install_dir_basename"
 mkdir -p "$install_dir"
 echo "Install directory: $install_dir"
 
-run_build=false
-
-if "$run_build"; then
+if [[ $command == "build" ]]; then
   # Flags: https://llvm.org/docs/CMake.html
 
   cd "$build_dir"
@@ -107,23 +113,29 @@ if "$run_build"; then
 
   cp "$test_results" "$build_dir"
   cp "$test_results" "$install_dir"
-else
-  echo "Skipped the build (testing release uploads.)"
 fi
 
 cd "$top_dir"
 
-echo "Current directory: $top_dir"
-echo "Creating archives"
+if [[ $command == "build" ]]; then
+  echo "Current directory: $top_dir"
+  echo "Creating archives"
+fi
 
 build_archive="$build_dir_basename-$llvm_sha1.zip"
-( set -x; zip -r "$build_archive" "$build_dir_basename" )
+if [[ $command == "build" ]]; then
+  ( set -x; zip -r "$build_archive" "$build_dir_basename" )
+fi
 
 installed_archive="$install_dir_basename-$llvm_sha1.zip"
-( set -x; zip -r "$installed_archive" "$install_dir_basename" )
+if [[ $command == "build" ]]; then
+  ( set -x; zip -r "$installed_archive" "$install_dir_basename" )
+fi
 
-set -x
-hub release create "$tag" \
-  -m "Release for LLVM commit $llvm_sha1" \
-  -a "$build_archive" \
-  -a "$installed_archive"
+if [[ $command == "upload" ]]; then
+  set -x
+  hub release create "$tag" \
+    -m "Release for LLVM commit $llvm_sha1" \
+    -a "$build_archive" \
+    -a "$installed_archive"
+fi
