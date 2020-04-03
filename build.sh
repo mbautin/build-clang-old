@@ -26,7 +26,7 @@ if ! command -v hub; then
   ls -l "$tools_bin_dir"
 fi
 
-if [[ -z ${GITHUB_TOKEN:-} ]]; then
+if [[ "$command" == "upload" && -z ${GITHUB_TOKEN:-} ]]; then
   echo "GITHUB_TOKEN is not set. I won't be able to publish the release." >&2
   exit 1
 fi
