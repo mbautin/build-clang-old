@@ -7,7 +7,7 @@ if [[ $# -eq 0 ]]; then
   exit 1
 fi
 command=$1
-if [[ $command != "build" && $comamnd != "upload" ]]; then
+if [[ $command != "build" && $command != "upload" ]]; then
   echo "Either 'build' or 'upload' expected" >&2
   exit 1
 fi
