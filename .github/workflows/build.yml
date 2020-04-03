@@ -24,6 +24,9 @@ jobs:
 
       # Runs a single command using the runners shell
       - name: Build Clang
+        run: ./build.sh build
+
+      - name: Upload release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: ./build.sh
+        run: ./build.sh upload
