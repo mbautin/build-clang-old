@@ -70,7 +70,8 @@ if [[ $step == "build" ]]; then
     -DLLVM_BUILD_TESTS=ON \
     -DCMAKE_INSTALL_PREFIX="$install_dir" \
     -DLLVM_TARGETS_TO_BUILD="X86" \
-    -DLLVM_BUILD_EXAMPLES=ON
+    -DLLVM_BUILD_EXAMPLES=ON \
+    -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
   end_group
 
   start_group "Build LLVM and Clang"
