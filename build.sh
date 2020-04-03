@@ -40,7 +40,6 @@ if [[ "$step" == "upload" && -z ${GITHUB_TOKEN:-} ]]; then
 fi
 
 start_group "Cloning LLVM code if not already done"
-set -x
 if [[ ! -d $llvm_checkout_dir/.git ]]; then
   git clone --depth 1 https://github.com/llvm/llvm-project.git "$llvm_checkout_dir" 2>&1 | \
     grep -Ev 'Updating files:'
