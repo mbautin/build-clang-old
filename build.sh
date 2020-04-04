@@ -129,12 +129,15 @@ if [[ $step == "zip" ]]; then
   (
     cd "$top_dir"
 
-    start_group "Creating $build_archive"
-    ( set -x; zip -qr "$build_archive" "$build_dir_basename" )
-    end_group
-
+    if false; then
+      start_group "Creating $build_archive"
+      ( set -x; zip -qr "$build_archive" "$build_dir_basename" )
+      end_group
+    fi
+    
     start_group "Creating $installed_archive"
     ( set -x; zip -qr "$installed_archive" "$install_dir_basename" )
+    ls -l "$installed_archive"
     end_group
   )
 fi
@@ -145,7 +148,6 @@ if [[ $step == "upload" ]]; then
     cd "$initial_dir"
     hub release create "$tag" \
       -m "Release for LLVM commit $llvm_sha1" \
-      -a "$build_archive" \
       -a "$installed_archive"
   )
 fi
