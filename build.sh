@@ -41,15 +41,15 @@ if [[ "$step" == "upload" && -z ${GITHUB_TOKEN:-} ]]; then
   exit 1
 fi
 
-if [[ $step == "build" ]]; then
-  start_group "Cloning LLVM code if not already done"
-  if [[ ! -d $llvm_checkout_dir/.git ]]; then
-    git clone --depth 1 https://github.com/llvm/llvm-project.git "$llvm_checkout_dir" 2>&1 | \
-      grep -Ev 'Updating files:'
-  fi
-  llvm_sha1=$( cd "$llvm_checkout_dir" && git rev-parse HEAD )
-  end_group
+start_group "Cloning LLVM code if not already done"
+if [[ ! -d $llvm_checkout_dir/.git ]]; then
+  git clone --depth 1 https://github.com/llvm/llvm-project.git "$llvm_checkout_dir" 2>&1 | \
+    grep -Ev 'Updating files:'
+fi
+llvm_sha1=$( cd "$llvm_checkout_dir" && git rev-parse HEAD )
+end_group
 
+if [[ $step == "build" ]]; then
   if ! command -v ninja; then
     start_group "Installing Ninja"
     git clone --depth 1 --branch release https://github.com/ninja-build/ninja
